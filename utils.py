@@ -9,7 +9,6 @@ from munkres import Munkres
 
 EOS = 1e-10
 
-
 def apply_non_linearity(tensor, non_linearity, i):
     if non_linearity == 'elu':
         return F.elu(tensor * i - i) + 1
@@ -51,12 +50,12 @@ def edge_addition(adj, add_r):
     return adj
 
 
-def get_feat_mask(features, mask_rate):
+def get_feat_mask(features, mask_rate, DEVICE):
     feat_node = features.shape[1]
     mask = torch.zeros(features.shape)
     samples = np.random.choice(feat_node, size=int(feat_node * mask_rate), replace=False)
     mask[:, samples] = 1
-    return mask.cuda(), samples
+    return mask.to(DEVICE), samples
 
 
 def accuracy(preds, labels):
@@ -107,7 +106,10 @@ def normalize(adj, mode, sparse=False):
         else:
             exit("wrong norm mode")
     else:
-        adj = adj.coalesce()
+        try:
+            adj = adj.coalesce()
+        except:
+            print('Fail to coalesce !!!')
         if mode == "sym":
             inv_sqrt_degree = 1. / (torch.sqrt(torch.sparse.sum(adj, dim=1).values()))
             D_value = inv_sqrt_degree[adj.indices()[0]] * inv_sqrt_degree[adj.indices()[1]]
@@ -133,10 +135,10 @@ def cal_similarity_graph(node_embeddings):
     return similarity_graph
 
 
-def top_k(raw_graph, K):
+def top_k(raw_graph, K, DEVICE):
     values, indices = raw_graph.topk(k=int(K), dim=-1)
     assert torch.max(indices) < raw_graph.shape[1]
-    mask = torch.zeros(raw_graph.shape).cuda()
+    mask = torch.zeros(raw_graph.shape).to(DEVICE)
     mask[torch.arange(raw_graph.shape[0]).view(-1, 1), indices] = 1.
 
     mask.requires_grad = False
@@ -144,14 +146,14 @@ def top_k(raw_graph, K):
     return sparse_graph
 
 
-def knn_fast(X, k, b):
+def knn_fast(X, k, b, DEVICE):
     X = F.normalize(X, dim=1, p=2)
     index = 0
-    values = torch.zeros(X.shape[0] * (k + 1)).cuda()
-    rows = torch.zeros(X.shape[0] * (k + 1)).cuda()
-    cols = torch.zeros(X.shape[0] * (k + 1)).cuda()
-    norm_row = torch.zeros(X.shape[0]).cuda()
-    norm_col = torch.zeros(X.shape[0]).cuda()
+    values = torch.zeros(X.shape[0] * (k + 1)).to(DEVICE)
+    rows = torch.zeros(X.shape[0] * (k + 1)).to(DEVICE)
+    cols = torch.zeros(X.shape[0] * (k + 1)).to(DEVICE)
+    norm_row = torch.zeros(X.shape[0]).to(DEVICE)
+    norm_col = torch.zeros(X.shape[0]).to(DEVICE)
     while index < X.shape[0]:
         if (index + b) > (X.shape[0]):
             end = X.shape[0]
@@ -180,16 +182,17 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
         np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
     values = torch.from_numpy(sparse_mx.data)
     shape = torch.Size(sparse_mx.shape)
+    print('Sparse!')
     return torch.sparse.FloatTensor(indices, values, shape)
 
 
-def torch_sparse_to_dgl_graph(torch_sparse_mx):
+def torch_sparse_to_dgl_graph(torch_sparse_mx, DEVICE):
     torch_sparse_mx = torch_sparse_mx.coalesce()
     indices = torch_sparse_mx.indices()
     values = torch_sparse_mx.values()
     rows_, cols_ = indices[0,:], indices[1,:]
-    dgl_graph = dgl.graph((rows_, cols_), num_nodes=torch_sparse_mx.shape[0], device='cuda')
-    dgl_graph.edata['w'] = values.detach().cuda()
+    dgl_graph = dgl.graph((rows_, cols_), num_nodes=torch_sparse_mx.shape[0], device=DEVICE)
+    dgl_graph.edata['w'] = values.detach().to(DEVICE)
     return dgl_graph
 
 

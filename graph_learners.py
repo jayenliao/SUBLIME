@@ -28,7 +28,7 @@ class FGP_learner(nn.Module):
 
 
 class ATT_learner(nn.Module):
-    def __init__(self, nlayers, isize, k, knn_metric, i, sparse, mlp_act):
+    def __init__(self, nlayers, isize, k, knn_metric, i, sparse, mlp_act, device):
         super(ATT_learner, self).__init__()
 
         self.i = i
@@ -40,6 +40,7 @@ class ATT_learner(nn.Module):
         self.non_linearity = 'relu'
         self.sparse = sparse
         self.mlp_act = mlp_act
+        self.device = device
 
     def internal_forward(self, h):
         for i, layer in enumerate(self.layers):
@@ -54,25 +55,25 @@ class ATT_learner(nn.Module):
     def forward(self, features):
         if self.sparse:
             embeddings = self.internal_forward(features)
-            rows, cols, values = knn_fast(embeddings, self.k, 1000)
+            rows, cols, values = knn_fast(embeddings, self.k, 1000, self.device)
             rows_ = torch.cat((rows, cols))
             cols_ = torch.cat((cols, rows))
             values_ = torch.cat((values, values))
             values_ = apply_non_linearity(values_, self.non_linearity, self.i)
-            adj = dgl.graph((rows_, cols_), num_nodes=features.shape[0], device='cuda')
+            adj = dgl.graph((rows_, cols_), num_nodes=features.shape[0], device=self.device)
             adj.edata['w'] = values_
             return adj
         else:
             embeddings = self.internal_forward(features)
             embeddings = F.normalize(embeddings, dim=1, p=2)
             similarities = cal_similarity_graph(embeddings)
-            similarities = top_k(similarities, self.k + 1)
+            similarities = top_k(similarities, self.k + 1, self.device)
             similarities = apply_non_linearity(similarities, self.non_linearity, self.i)
             return similarities
 
 
 class MLP_learner(nn.Module):
-    def __init__(self, nlayers, isize, k, knn_metric, i, sparse, act):
+    def __init__(self, nlayers, isize, k, knn_metric, i, sparse, act, device):
         super(MLP_learner, self).__init__()
 
         self.layers = nn.ModuleList()
@@ -93,6 +94,7 @@ class MLP_learner(nn.Module):
         self.i = i
         self.sparse = sparse
         self.act = act
+        self.device = device
 
     def internal_forward(self, h):
         for i, layer in enumerate(self.layers):
@@ -111,25 +113,25 @@ class MLP_learner(nn.Module):
     def forward(self, features):
         if self.sparse:
             embeddings = self.internal_forward(features)
-            rows, cols, values = knn_fast(embeddings, self.k, 1000)
+            rows, cols, values = knn_fast(embeddings, self.k, 1000, self.device)
             rows_ = torch.cat((rows, cols))
             cols_ = torch.cat((cols, rows))
             values_ = torch.cat((values, values))
             values_ = apply_non_linearity(values_, self.non_linearity, self.i)
-            adj = dgl.graph((rows_, cols_), num_nodes=features.shape[0], device='cuda')
+            adj = dgl.graph((rows_, cols_), num_nodes=features.shape[0], device=self.device)
             adj.edata['w'] = values_
             return adj
         else:
             embeddings = self.internal_forward(features)
             embeddings = F.normalize(embeddings, dim=1, p=2)
             similarities = cal_similarity_graph(embeddings)
-            similarities = top_k(similarities, self.k + 1)
+            similarities = top_k(similarities, self.k + 1, self.device)
             similarities = apply_non_linearity(similarities, self.non_linearity, self.i)
             return similarities
 
 
 class GNN_learner(nn.Module):
-    def __init__(self, nlayers, isize, k, knn_metric, i, sparse, mlp_act, adj):
+    def __init__(self, nlayers, isize, k, knn_metric, i, sparse, mlp_act, adj, device):
         super(GNN_learner, self).__init__()
 
         self.adj = adj
@@ -151,6 +153,7 @@ class GNN_learner(nn.Module):
         self.i = i
         self.sparse = sparse
         self.mlp_act = mlp_act
+        self.device = device
 
     def internal_forward(self, h):
         for i, layer in enumerate(self.layers):
@@ -169,18 +172,18 @@ class GNN_learner(nn.Module):
     def forward(self, features):
         if self.sparse:
             embeddings = self.internal_forward(features)
-            rows, cols, values = knn_fast(embeddings, self.k, 1000)
+            rows, cols, values = knn_fast(embeddings, self.k, 1000, self.device)
             rows_ = torch.cat((rows, cols))
             cols_ = torch.cat((cols, rows))
             values_ = torch.cat((values, values))
             values_ = apply_non_linearity(values_, self.non_linearity, self.i)
-            adj = dgl.graph((rows_, cols_), num_nodes=features.shape[0], device='cuda')
+            adj = dgl.graph((rows_, cols_), num_nodes=features.shape[0], device=self.device)
             adj.edata['w'] = values_
             return adj
         else:
             embeddings = self.internal_forward(features)
             embeddings = F.normalize(embeddings, dim=1, p=2)
             similarities = cal_similarity_graph(embeddings)
-            similarities = top_k(similarities, self.k + 1)
+            similarities = top_k(similarities, self.k + 1, self.device)
             similarities = apply_non_linearity(similarities, self.non_linearity, self.i)
             return similarities
